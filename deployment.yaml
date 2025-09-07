@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: energy-consumption-analyzer
+  labels:
+    app: energy-consumption-analyzer
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: energy-consumption-analyzer
+  template:
+    metadata:
+      labels:
+        app: energy-consumption-analyzer
+    spec:
+      containers:
+      - name: energy-analyzer
+        image: energy-consumption-analyzer:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: PYTHONPATH
+          value: "/app/backend"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/months
+          readOnly: true
+        - name: models-volume
+          mountPath: /app/models
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: energy-data-pvc
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: energy-analyzer-service
+spec:
+  selector:
+    app: energy-consumption-analyzer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: energy-data-pvc
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
